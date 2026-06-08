@@ -8,8 +8,16 @@ export class GoogleTTSProvider extends BaseTTSProvider {
 
   async _getClient() {
     if (!this.client) {
-      const { TextToSpeechClient } = await import('@google-cloud/text-to-speech');
-      this.client = new TextToSpeechClient();
+      let mod;
+      try {
+        mod = await import('@google-cloud/text-to-speech');
+      } catch {
+        throw new Error(
+          'The Google Cloud TTS provider needs the optional "@google-cloud/text-to-speech" dependency, ' +
+          'which is not installed. Install it with: npm install @google-cloud/text-to-speech'
+        );
+      }
+      this.client = new mod.TextToSpeechClient();
     }
     return this.client;
   }

@@ -1,12 +1,19 @@
-import { statSync, openSync, readSync, closeSync } from 'fs';
+import { statSync, openSync, readSync, closeSync, watch } from 'fs';
 import { EventEmitter } from 'events';
 
-const POLL_INTERVAL_MS = 200;
+// fs.watch (FSEvents on macOS) reacts to new transcript content in ~1ms once
+// armed, so real output is spoken almost immediately. A safety poll stays as a
+// fallback at the original 200ms cadence — it covers the brief window before
+// fs.watch arms, file rotation, and any platform where fs.watch is flaky, so
+// correctness never depends on fs.watch and latency never regresses.
+// _readNewContent() is offset-guarded and idempotent, so being triggered by
+// both the watcher and the poll only ever reads new bytes once.
+const SAFETY_POLL_MS = 200;
 
 /**
- * Watches a Claude Code transcript JSONL file in real-time via polling.
+ * Watches a Claude Code transcript JSONL file in real-time.
  * Emits 'text' events for each new assistant text block as it's written.
- * Uses polling instead of fs.watch() for reliable macOS support.
+ * Event-driven via fs.watch, with a periodic poll as a reliability fallback.
  */
 export class TranscriptWatcher extends EventEmitter {
   constructor(transcriptPath) {
@@ -14,6 +21,7 @@ export class TranscriptWatcher extends EventEmitter {
     this.path = transcriptPath;
     this.offset = 0;
     this.pollTimer = null;
+    this.fsWatcher = null;
     this.buffer = '';
     this.processedLines = new Set();
   }
@@ -27,8 +35,16 @@ export class TranscriptWatcher extends EventEmitter {
       this.offset = 0;
     }
 
-    // Poll for changes every 300ms
-    this.pollTimer = setInterval(() => this._readNewContent(), POLL_INTERVAL_MS);
+    // Event-driven: react immediately when the file changes.
+    try {
+      this.fsWatcher = watch(this.path, () => this._readNewContent());
+    } catch {
+      this.fsWatcher = null; // fall back to polling only
+    }
+
+    // Safety-net poll: still pick up changes if fs.watch misses any (e.g. file
+    // rotation) or isn't available on the platform.
+    this.pollTimer = setInterval(() => this._readNewContent(), SAFETY_POLL_MS);
 
     this.emit('watching', { path: this.path });
   }
@@ -37,6 +53,10 @@ export class TranscriptWatcher extends EventEmitter {
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
+    }
+    if (this.fsWatcher) {
+      this.fsWatcher.close();
+      this.fsWatcher = null;
     }
   }
 
