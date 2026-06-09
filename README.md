@@ -10,6 +10,14 @@ Built this because I was tired of babysitting my screen every time Claude Code w
 npm install -g claude-says
 ```
 
+> **Lean install (recommended for macOS):** the Google Cloud TTS provider pulls in a large optional dependency tree (~100 packages, ~15 MB). If you use the built-in macOS `say` voice (the default) or ElevenLabs, skip it:
+>
+> ```bash
+> npm install -g claude-says --omit=optional
+> ```
+>
+> You can add it later if you want Google Cloud TTS: `npm install -g @google-cloud/text-to-speech`.
+
 ## Quick Start
 
 ```bash

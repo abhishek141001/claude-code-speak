@@ -13,7 +13,7 @@ Two runtime components communicate over a Unix domain socket (`/tmp/claude-speak
 1. **Hook script** (`bin/claude-speak-hook.js`) — Installed as a Claude Code `Stop` hook. Reads the session transcript, extracts new assistant text since last invocation (tracked via byte-offset state files in `/tmp/claude-speak-state/`), and sends it to the daemon. Must complete within 3s to avoid blocking Claude's output.
 
 2. **Daemon** (`bin/claude-speak.js` → `src/daemon.js`) — Long-running process with two text ingestion paths:
-   - **TranscriptWatcher** (`src/transcript-watcher.js`) — Polls a JSONL transcript file every 200ms, emits `text` events for new assistant messages. Deduplicates by UUID.
+   - **TranscriptWatcher** (`src/transcript-watcher.js`) — Watches a JSONL transcript file via `fs.watch` for near-instant reaction, with a 200ms safety poll as a fallback. Emits `text` events for new assistant messages. Deduplicates by UUID.
    - **IPC fallback** — Receives text from hooks via Unix socket when no transcript is being watched.
 
 ### Data Flow
